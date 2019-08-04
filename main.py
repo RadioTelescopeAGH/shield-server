@@ -1,26 +1,57 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import time
+import json
 
-hostName = "localhost"
-hostPort = 8099
+from config.actions import Actions
+from config.config import Config
 
-class MyServer(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
+
+class Server(BaseHTTPRequestHandler):
+
+    data = {}
+    actions = Actions()
+
+    def get_data(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        self.data = json.loads(post_data)
+
+    def response(self, controller_response=(None, None, None)):
+        status, code, data = controller_response
+
+        if code is None:
+            code = 500
+
+        self.send_response(code)
+
+        self.send_header("Content-type", "application/json")
         self.end_headers()
-        self.wfile.write(bytes("<html><head><title>Title goes here.</title></head>", "utf-8"))
-        self.wfile.write(bytes("<body><p>This is a test.</p>", "utf-8"))
-        self.wfile.write(bytes("<p>You accessed path: %s</p>" % self.path, "utf-8"))
-        self.wfile.write(bytes("</body></html>", "utf-8"))
 
-myServer = HTTPServer((hostName, hostPort), MyServer)
-print(time.asctime(), "Server Starts - %s:%s" % (hostName, hostPort))
+        self.wfile.write(bytes(json.dumps({"status": status, "data": data}), "utf-8"))
 
-try:
-    myServer.serve_forever()
-except KeyboardInterrupt:
-    pass
+    def exec_request(self):
+        self.get_data()
+        self.response(self.actions.exec(self.data.get('controller'), self.data.get('action'), self.data.get('data')))
 
-myServer.server_close()
-print(time.asctime(), "Server Stops - %s:%s" % (hostName, hostPort))
+    def do_GET(self):
+        self.exec_request()
+
+    def do_POST(self):
+        self.exec_request()
+
+
+def main():
+    server = HTTPServer((Config.hostName, Config.hostPort), Server)
+    print(time.asctime(), "Server Starts - %s:%s" % (Config.hostName, Config.hostPort))
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+    server.server_close()
+    print(time.asctime(), "Server Stops - %s:%s" % (Config.hostName, Config.hostPort))
+
+
+print("AGH SHIELD TEAM - 2019, All right reserved")
+main()
